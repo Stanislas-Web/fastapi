@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+httpx
+SQLAlchemy
+asyncpg
+psycopg2-binary
+python-dotenv
+alembic
+pydantic-settings
+pytest
+pytest-asyncio
+pytest-mock
+aiosqlite
+
