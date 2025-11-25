@@ -30,7 +30,9 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql://carduser:cardpass@postgres:5432/card_connector_db
+      # Forcer DATABASE_URL pour utiliser le service PostgreSQL Docker
+      # postgres est le nom du service dans docker-compose
+      DATABASE_URL: postgresql+asyncpg://carduser:cardpass@postgres:5432/card_connector_db
     volumes:
       - .:/app
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload

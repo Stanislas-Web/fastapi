@@ -79,7 +79,11 @@ def get_mock_ni_response(operation: str, card_id: int, pan_alias: str | None) ->
                 "niCardId": f"NI-{card_id}",
                 "visaCardNumber": visa_card_number,  # Numéro VISA généré par NI
                 "panNumber": visa_card_number,  # Alias pour compatibilité
-                "expiryDate": "12/2028",  # Date d'expiration mockée
+                "expiryDate": "12/2028",  # Date d'expiration mockée (format MM/YYYY)
+                "exp_month": 12,  # Mois d'expiration
+                "exp_year": 2028,  # Année d'expiration
+                "pan_display": f"{visa_card_number[:4]}****{visa_card_number[-4:]}",  # PAN masqué pour affichage
+                "external_id": f"NI-{card_id}",  # ID externe
                 "cvv": "123",  # CVV mocké (pour tests uniquement)
                 "timestamp": "2024-01-01T00:00:00Z"
             }
@@ -91,6 +95,9 @@ def get_mock_ni_response(operation: str, card_id: int, pan_alias: str | None) ->
                 "cardReference": card_reference,
                 "message": "Card blocked successfully",
                 "niCardId": f"NI-{card_id}",
+                "expiryDate": "12/2028",
+                "exp_month": 12,
+                "exp_year": 2028,
                 "timestamp": "2024-01-01T00:00:00Z"
             }
         },
@@ -101,6 +108,9 @@ def get_mock_ni_response(operation: str, card_id: int, pan_alias: str | None) ->
                 "cardReference": card_reference,
                 "message": "Card unblocked successfully",
                 "niCardId": f"NI-{card_id}",
+                "expiryDate": "12/2028",
+                "exp_month": 12,
+                "exp_year": 2028,
                 "timestamp": "2024-01-01T00:00:00Z"
             }
         },
@@ -111,6 +121,9 @@ def get_mock_ni_response(operation: str, card_id: int, pan_alias: str | None) ->
                 "cardReference": card_reference,
                 "message": "Card opposed successfully",
                 "niCardId": f"NI-{card_id}",
+                "expiryDate": "12/2028",
+                "exp_month": 12,
+                "exp_year": 2028,
                 "timestamp": "2024-01-01T00:00:00Z"
             }
         }
@@ -187,6 +200,7 @@ MOCK_CARDS = [
 
 # Webhooks mockés pour les tests
 MOCK_WEBHOOKS = {
+    # Événements d'action (nécessitent un appel à NI)
     "activation": {
         "id": "2401597",
         "webhookId": "0189fc90-73ae-701f-90a2-116ab0f5521c",
@@ -225,6 +239,96 @@ MOCK_WEBHOOKS = {
         "data": {
             "cardId": 12345,
             "panAlias": "CMSPARTNER-12345"
+        }
+    },
+    # Événements informatifs de statut
+    "activated": {
+        "id": "2401601",
+        "webhookId": "0189fc90-73ae-701f-90a2-116ab0f55220",
+        "type": "card",
+        "event": "card.status.activated",
+        "data": {
+            "cardId": 12345,
+            "panAlias": "CMSPARTNER-12345"
+        }
+    },
+    "blocked": {
+        "id": "2401602",
+        "webhookId": "0189fc90-73ae-701f-90a2-116ab0f55221",
+        "type": "card",
+        "event": "card.status.blocked",
+        "data": {
+            "cardId": 12346,
+            "panAlias": "CMSPARTNER-12346"
+        }
+    },
+    "expired": {
+        "id": "2401603",
+        "webhookId": "0189fc90-73ae-701f-90a2-116ab0f55222",
+        "type": "card",
+        "event": "card.status.expired",
+        "data": {
+            "cardId": 12345,
+            "panAlias": "CMSPARTNER-12345"
+        }
+    },
+    # Événement de création
+    "new": {
+        "id": "2401604",
+        "webhookId": "0189fc90-73ae-701f-90a2-116ab0f55223",
+        "type": "card",
+        "event": "card.new",
+        "data": {
+            "cardId": 12350,
+            "panAlias": "CMSPARTNER-12350"
+        }
+    },
+    # Événements de gestion d'opérations
+    "management_operation_accepted": {
+        "id": "2378158",
+        "webhookId": "018a64a1-5fe4-7379-b2f9-02f5b0ba264c",
+        "type": "card",
+        "event": "card.management_operation.accepted",
+        "data": {
+            "cardId": 2378158,
+            "panAlias": "CMS PARTNER-2378158",
+            "operationId": 1707235,
+            "operationNature": "LIFE_CYCLE",
+            "operationType": "CARD_FEATURES_UPDATE",
+            "operationState": "ACCEPTED",
+            "parameters": {
+                "CASH_OPERATION": False
+            }
+        }
+    },
+    "management_operation_refused": {
+        "id": "2401598",
+        "webhookId": "0189fc90-b83e-7151-9fd2-9a5d05d091a8",
+        "type": "card",
+        "event": "card.management_operation.refused",
+        "data": {
+            "cardId": 2401598,
+            "panAlias": "CMS PARTNER-2401598",
+            "operationId": 1700459,
+            "operationNature": "LIFE_CYCLE",
+            "operationType": "CARD_SUPPRESSION",
+            "operationState": "REFUSED",
+            "parameters": []
+        }
+    },
+    "management_operation_settled": {
+        "id": "2401598",
+        "webhookId": "0189fc90-bc3e-7066-b689-362fda226b4b",
+        "type": "card",
+        "event": "card.management_operation.settled",
+        "data": {
+            "cardId": 2401598,
+            "panAlias": "CMS PARTNER-2401598",
+            "operationId": 1700459,
+            "operationNature": "LIFE_CYCLE",
+            "operationType": "CARD_SUPPRESSION",
+            "operationState": "SETTLED",
+            "parameters": []
         }
     }
 }

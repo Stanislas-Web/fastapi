@@ -39,44 +39,83 @@ async def send_card_operation_result(
     card_id: int, 
     operation_type: str, 
     result: str,
+    pan_alias: str | None = None,
     visa_card_number: str | None = None,
     ni_details: dict | None = None
 ):
     """
     Envoie le résultat d'une opération carte à Skaleet Admin API
     
+    Format de la requête selon le contrat Skaleet:
+    POST {baseUrl}/cards/{id}/operation/{operation_type}/{result}
+    
+    Body:
+    {
+        "pan_alias": "string",
+        "pan_display": "string",
+        "external_id": "EXT123",
+        "exp_month": 1,
+        "exp_year": 1970
+    }
+    
     Args:
         card_id: ID de la carte Skaleet
-        operation_type: Type d'opération (card_activation, card_blocking, etc.)
+        operation_type: Type d'opération (card_activation, card_blocking, card_unblocking, 
+                       card_opposition, card_creation, card_suppression, etc.)
         result: Résultat de l'opération ("accept" ou "error")
-        visa_card_number: Numéro de carte VISA généré par NI (optionnel)
+        pan_alias: Alias PAN de la carte (ex: "CMS PARTNER-12345")
+        visa_card_number: Numéro de carte VISA généré par NI (16 chiffres)
         ni_details: Détails supplémentaires de la réponse NI (optionnel)
     """
     token = await get_admin_token()
+    # URL selon le format Skaleet: baseUrl/cards/{id}/operation/{operation_type}/{result}
     url = f"{settings.skaleet_admin_base_url}/cards/{card_id}/operation/{operation_type}/{result}"
     headers = {
         "Authorization": f"Bearer {token}",
+        "Accept": "application/json",
         "Content-Type": "application/json"
     }
     
-    # Préparer le body avec les données de la carte VISA si disponibles
+    # Préparer le body selon le format Skaleet
     body = {}
+    
+    # pan_alias (obligatoire si disponible)
+    if pan_alias:
+        body["pan_alias"] = pan_alias
+    
+    # pan_display: numéro PAN complet (non masqué)
     if visa_card_number:
-        body["visaCardNumber"] = visa_card_number
-        body["panNumber"] = visa_card_number  # Alias pour compatibilité
-    if ni_details:
-        body["niDetails"] = ni_details
-        # Extraire d'autres infos utiles de ni_details
-        if "expiryDate" in ni_details:
-            body["expiryDate"] = ni_details["expiryDate"]
-        if "niCardId" in ni_details:
-            body["niCardId"] = ni_details["niCardId"]
+        body["pan_display"] = visa_card_number
+    elif pan_alias:
+        body["pan_display"] = pan_alias
+    
+    # external_id: ID externe (peut être le niCardId ou un identifiant unique)
+    if ni_details and "niCardId" in ni_details:
+        body["external_id"] = ni_details["niCardId"]
+    else:
+        body["external_id"] = f"NI-{card_id}"
+    
+    # exp_month et exp_year: extraire de expiryDate ou utiliser des valeurs par défaut
+    if ni_details and "expiryDate" in ni_details:
+        # Format attendu: "MM/YYYY" ou "12/2028"
+        expiry_date = ni_details["expiryDate"]
+        if "/" in expiry_date:
+            parts = expiry_date.split("/")
+            if len(parts) == 2:
+                body["exp_month"] = int(parts[0])
+                body["exp_year"] = int(parts[1])
+    else:
+        # Valeurs par défaut (3 ans à partir de maintenant)
+        from datetime import datetime
+        current_year = datetime.now().year
+        body["exp_month"] = 12
+        body["exp_year"] = current_year + 3
     
     async with httpx.AsyncClient() as client:
         try:
             response = await client.post(
                 url,
-                json=body if body else None,
+                json=body,
                 headers=headers,
                 timeout=30.0
             )
@@ -84,10 +123,12 @@ async def send_card_operation_result(
             logger.info(
                 f"Successfully sent operation result to Skaleet: "
                 f"card_id={card_id}, operation={operation_type}, result={result}, "
-                f"visaCardNumber={'***' + visa_card_number[-4:] if visa_card_number else 'N/A'}"
+                f"pan_alias={pan_alias}, pan_display={'***' + body.get('pan_display', '')[-4:] if body.get('pan_display') else 'N/A'}"
             )
         except httpx.HTTPError as e:
             logger.error(f"Skaleet API error when sending operation result: {e}")
+            if hasattr(e, 'response') and e.response is not None:
+                logger.error(f"Response body: {e.response.text}")
             raise
         except Exception as e:
             logger.error(f"Unexpected error sending operation result: {e}", exc_info=True)

@@ -26,10 +26,30 @@ async def handle_skaleet_card_webhook(
     - Le service se concentre sur la validation des données et la logique métier
     
     Événements supportés :
+    
+    Événements d'action (nécessitent un appel à NI) :
     - card.status.activation_requested
     - card.status.block_requested
     - card.status.unblock_requested
     - card.status.opposed_requested
+    
+    Événements informatifs de statut :
+    - card.status.activated
+    - card.status.blocked
+    - card.status.unblocked
+    - card.status.pending
+    - card.status.expired
+    - card.status.opposed
+    - card.status.removed
+    
+    Événements de création :
+    - card.new
+    
+    Événements de gestion d'opérations :
+    - card.management_operation.accepted
+    - card.management_operation.refused
+    - card.management_operation.settled
+    - card.management_operation.err_settled
     """
     # Récupérer le correlation_id depuis le contexte ou request.state
     correlation_id = get_correlation_id_from_context() or getattr(request.state, "correlation_id", "unknown")

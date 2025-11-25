@@ -119,14 +119,41 @@ class CardWebhookService:
             logger.info(f"Processing Skaleet card webhook: {event} for cardId: {card_id}, webhookId: {webhook_id}")
             
             # Traiter selon le type d'événement
+            # Événements qui nécessitent une action (appel à NI)
             if event == SkaleetCardEvent.ACTIVATION_REQUESTED.value:
                 return await self._handle_activation(webhook, card_id, pan_alias, webhook_id, event)
             elif event == SkaleetCardEvent.BLOCK_REQUESTED.value:
                 return await self._handle_block(webhook, card_id, pan_alias, webhook_id, event)
             elif event == SkaleetCardEvent.UNBLOCK_REQUESTED.value:
                 return await self._handle_unblock(webhook, card_id, pan_alias, webhook_id, event)
-            elif event == "card.status.opposed_requested":
+            elif event == SkaleetCardEvent.OPPOSED_REQUESTED.value:
                 return await self._handle_oppose(webhook, card_id, pan_alias, webhook_id, event)
+            
+            # Événements informatifs de statut (mise à jour du statut uniquement)
+            elif event in [
+                SkaleetCardEvent.ACTIVATED.value,
+                SkaleetCardEvent.BLOCKED.value,
+                SkaleetCardEvent.UNBLOCKED.value,
+                SkaleetCardEvent.PENDING.value,
+                SkaleetCardEvent.EXPIRED.value,
+                SkaleetCardEvent.OPPOSED.value,
+                SkaleetCardEvent.REMOVED.value
+            ]:
+                return await self._handle_status_update(webhook, card_id, pan_alias, webhook_id, event)
+            
+            # Événement de création de carte
+            elif event == SkaleetCardEvent.NEW.value:
+                return await self._handle_card_new(webhook, card_id, pan_alias, webhook_id, event)
+            
+            # Événements de gestion d'opérations
+            elif event in [
+                SkaleetCardEvent.MANAGEMENT_OPERATION_ACCEPTED.value,
+                SkaleetCardEvent.MANAGEMENT_OPERATION_REFUSED.value,
+                SkaleetCardEvent.MANAGEMENT_OPERATION_SETTLED.value,
+                SkaleetCardEvent.MANAGEMENT_OPERATION_ERR_SETTLED.value
+            ]:
+                return await self._handle_management_operation(webhook, card_id, pan_alias, webhook_id, event)
+            
             else:
                 logger.warning(f"Event type {event} not yet implemented")
                 return {
@@ -222,6 +249,7 @@ class CardWebhookService:
                     card_id, 
                     operation_type, 
                     "accept",
+                    pan_alias=pan_alias,
                     visa_card_number=visa_card_number,
                     ni_details=ni_details
                 )
@@ -238,7 +266,12 @@ class CardWebhookService:
             
             # Appeler Skaleet Admin avec erreur
             try:
-                await send_card_operation_result(card_id, operation_type, "error")
+                await send_card_operation_result(
+                    card_id, 
+                    operation_type, 
+                    "error",
+                    pan_alias=pan_alias
+                )
             except Exception as e:
                 logger.error(f"Error sending error result to Skaleet: {e}", exc_info=True)
         
@@ -329,4 +362,217 @@ class CardWebhookService:
             self.ni_client.oppose_card_in_ni,
             "OPPOSED"
         )
+    
+    async def _handle_status_update(
+        self,
+        webhook: SkaleetWebhook,
+        card_id: int,
+        pan_alias: str | None,
+        webhook_id: str,
+        event: str
+    ) -> dict:
+        """
+        Traite les événements informatifs de statut (activated, blocked, unblocked, etc.)
+        Ces événements informent d'un changement de statut, pas d'une demande d'action
+        """
+        # Vérifier l'idempotence
+        if await is_webhook_processed(self.db, webhook_id):
+            logger.info(f"Webhook {webhook_id} already processed (idempotent)")
+            return {
+                "cardId": card_id,
+                "event": event,
+                "idempotent": True,
+                "message": "Webhook already processed"
+            }
+        
+        # Créer ou récupérer la carte
+        card = await self.card_repo.get_or_create(card_id, pan_alias)
+        if pan_alias and not card.pan_alias:
+            card.pan_alias = pan_alias
+            await self.db.commit()
+            await self.db.refresh(card)
+        
+        # Extraire le statut de l'événement
+        status_map = {
+            SkaleetCardEvent.ACTIVATED.value: "ACTIVE",
+            SkaleetCardEvent.BLOCKED.value: "BLOCKED",
+            SkaleetCardEvent.UNBLOCKED.value: "ACTIVE",
+            SkaleetCardEvent.PENDING.value: "PENDING",
+            SkaleetCardEvent.EXPIRED.value: "EXPIRED",
+            SkaleetCardEvent.OPPOSED.value: "OPPOSED",
+            SkaleetCardEvent.REMOVED.value: "REMOVED"
+        }
+        
+        new_status = status_map.get(event, "UNKNOWN")
+        
+        # Mettre à jour le statut Skaleet
+        card.status_skaleet = new_status
+        await self.db.commit()
+        await self.db.refresh(card)
+        
+        # Enregistrer l'opération pour traçabilité
+        operation = await mark_webhook_started(
+            self.db,
+            webhook_id,
+            card_id,
+            "status_update",
+            event,
+            webhook.id
+        )
+        operation.raw_webhook = webhook.dict()
+        operation.status = OperationStatus.SUCCESS.value
+        await self.db.commit()
+        
+        logger.info(f"Status updated for card {card_id}: {new_status} (event: {event})")
+        
+        return {
+            "cardId": card_id,
+            "event": event,
+            "status": new_status,
+            "message": "Status updated"
+        }
+    
+    async def _handle_card_new(
+        self,
+        webhook: SkaleetWebhook,
+        card_id: int,
+        pan_alias: str | None,
+        webhook_id: str,
+        event: str
+    ) -> dict:
+        """
+        Traite l'événement card.new (création d'une nouvelle carte)
+        """
+        # Vérifier l'idempotence
+        if await is_webhook_processed(self.db, webhook_id):
+            logger.info(f"Webhook {webhook_id} already processed (idempotent)")
+            return {
+                "cardId": card_id,
+                "event": event,
+                "idempotent": True,
+                "message": "Webhook already processed"
+            }
+        
+        # Créer la carte
+        card = await self.card_repo.get_or_create(card_id, pan_alias)
+        if pan_alias and not card.pan_alias:
+            card.pan_alias = pan_alias
+        card.status_skaleet = "PENDING"
+        await self.db.commit()
+        await self.db.refresh(card)
+        
+        # Enregistrer l'opération
+        operation = await mark_webhook_started(
+            self.db,
+            webhook_id,
+            card_id,
+            "card_creation",
+            event,
+            webhook.id
+        )
+        operation.raw_webhook = webhook.dict()
+        operation.status = OperationStatus.SUCCESS.value
+        await self.db.commit()
+        
+        logger.info(f"New card created: {card_id} (panAlias: {pan_alias})")
+        
+        return {
+            "cardId": card_id,
+            "event": event,
+            "status": "PENDING",
+            "message": "Card created"
+        }
+    
+    async def _handle_management_operation(
+        self,
+        webhook: SkaleetWebhook,
+        card_id: int,
+        pan_alias: str | None,
+        webhook_id: str,
+        event: str
+    ) -> dict:
+        """
+        Traite les événements card.management_operation.*
+        Ces événements informent du résultat d'une opération de gestion
+        """
+        # Vérifier l'idempotence
+        if await is_webhook_processed(self.db, webhook_id):
+            logger.info(f"Webhook {webhook_id} already processed (idempotent)")
+            return {
+                "cardId": card_id,
+                "event": event,
+                "idempotent": True,
+                "message": "Webhook already processed"
+            }
+        
+        # Créer ou récupérer la carte
+        card = await self.card_repo.get_or_create(card_id, pan_alias)
+        if pan_alias and not card.pan_alias:
+            card.pan_alias = pan_alias
+            await self.db.commit()
+            await self.db.refresh(card)
+        
+        # Extraire les informations de l'opération
+        operation_id = webhook.data.operationId
+        operation_type = webhook.data.operationType
+        operation_state = webhook.data.operationState
+        operation_nature = webhook.data.operationNature
+        parameters = webhook.data.parameters or {}
+        
+        # Déterminer le type d'opération pour CardOperation
+        operation_type_mapping = {
+            "CARD_CREATION": "card_creation",
+            "CARD_SUPPRESSION": "card_suppression",
+            "CARD_FEATURES_UPDATE": "card_features_update",
+            "CARD_ACTIVATION": "card_activation",
+            "CARD_BLOCKING": "card_blocking",
+            "CARD_UNBLOCKING": "card_unblocking",
+            "CARD_OPPOSITION": "card_opposition"
+        }
+        
+        mapped_operation_type = operation_type_mapping.get(operation_type, operation_type.lower() if operation_type else "unknown")
+        
+        # Déterminer le statut
+        status_map = {
+            "ACCEPTED": OperationStatus.SUCCESS.value,
+            "REFUSED": OperationStatus.ERROR.value,
+            "SETTLED": OperationStatus.SUCCESS.value,
+            "ERR_SETTLED": OperationStatus.ERROR.value
+        }
+        operation_status = status_map.get(operation_state, OperationStatus.PENDING.value) if operation_state else OperationStatus.PENDING.value
+        
+        # Enregistrer l'opération
+        operation = await mark_webhook_started(
+            self.db,
+            webhook_id,
+            card_id,
+            mapped_operation_type,
+            event,
+            webhook.id
+        )
+        operation.raw_webhook = webhook.dict()
+        operation.status = operation_status
+        if operation_state:
+            operation.ni_result_code = operation_state
+        await self.db.commit()
+        await self.db.refresh(operation)
+        
+        # Mettre à jour le statut de la carte si nécessaire
+        if operation_state == "ACCEPTED" and operation_type == "CARD_CREATION":
+            card.status_skaleet = "ACTIVE"
+            await self.db.commit()
+        
+        logger.info(
+            f"Management operation processed: cardId={card_id}, "
+            f"operationId={operation_id}, type={operation_type}, state={operation_state}"
+        )
+        
+        return {
+            "cardId": card_id,
+            "event": event,
+            "operationId": operation_id,
+            "operationType": operation_type,
+            "operationState": operation_state,
+            "message": f"Management operation {operation_state}" if operation_state else "Management operation processed"
+        }
 
