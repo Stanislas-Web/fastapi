@@ -1,48 +1,10 @@
-# 🌐 Alternatives à ngrok - Tunnels pour Card Connector
+# 🌐 Tunnels pour Card Connector
 
-## Problème avec ngrok
-
-Si tu rencontres l'erreur `ERR_NGROK_9040`, c'est que ngrok bloque les connexions depuis ton IP. Voici des alternatives.
+Guide pour exposer le service local sur Internet.
 
 ---
 
-## Solution 1 : localtunnel (Recommandé) ⭐
-
-### Installation
-```bash
-# Pas besoin d'installation, utilise npx
-npx --yes localtunnel --port 8000
-```
-
-### Utilisation
-```bash
-# Lancer localtunnel
-npx --yes localtunnel --port 8000
-```
-
-Cela affichera :
-```
-your url is: https://xxxx-xx-xx-xx-xx.loca.lt
-```
-
-### URL du webhook
-```
-https://xxxx-xx-xx-xx-xx.loca.lt/api/v1/webhooks/skaleet/card
-```
-
-### Avantages
-- ✅ Gratuit
-- ✅ Pas besoin de compte
-- ✅ Pas de restriction IP
-- ✅ Simple à utiliser
-
-### Inconvénients
-- ⚠️ URL change à chaque lancement
-- ⚠️ Peut être plus lent que ngrok
-
----
-
-## Solution 2 : cloudflared (Cloudflare Tunnel)
+## Solution 1 : cloudflared (Cloudflare Tunnel) ⭐ Recommandé
 
 ### Installation
 ```bash
@@ -84,7 +46,7 @@ https://xxxx-xx-xx-xx-xx.trycloudflare.com/api/v1/webhooks/skaleet/card
 
 ---
 
-## Solution 3 : serveo (SSH Tunnel)
+## Solution 2 : serveo (SSH Tunnel)
 
 ### Utilisation
 ```bash
@@ -103,30 +65,12 @@ ssh -R 80:localhost:8000 serveo.net
 
 ---
 
-## Solution 4 : Pagekite
-
-### Installation
-```bash
-pip install pagekite
-```
-
-### Utilisation
-```bash
-python -m pagekite.py 8000 xxxx.pagekite.me
-```
-
----
-
 ## Comparaison rapide
 
 | Solution | Installation | Gratuit | Stabilité | Vitesse |
 |----------|--------------|---------|-----------|---------|
-| **localtunnel** | ✅ npx | ✅ | ⭐⭐⭐ | ⭐⭐⭐ |
 | **cloudflared** | ⚠️ brew | ✅ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ |
-| **ngrok** | ✅ brew | ✅* | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
-| **serveo** | ✅ SSH | ✅ | ⭐⭐ | ⭐⭐⭐ |
-
-*ngrok gratuit avec restrictions
+| **serveo** | ✅ SSH | ✅ | ⭐⭐⭐ | ⭐⭐⭐ |
 
 ---
 
@@ -154,11 +98,11 @@ cloudflared tunnel --url http://localhost:8000
 
 ## Recommandation
 
-Pour ton cas (erreur ngrok), je recommande **localtunnel** car :
-- ✅ Pas besoin d'installation
-- ✅ Fonctionne immédiatement
-- ✅ Pas de restriction IP
+Je recommande **cloudflared** car :
+- ✅ Pas de page d'avertissement
+- ✅ Rapide et fiable
 - ✅ Simple à utiliser
+- ✅ Fonctionne immédiatement pour les webhooks
 
 ---
 

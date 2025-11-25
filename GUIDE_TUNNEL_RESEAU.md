@@ -102,8 +102,6 @@ echo "Ouvre cette URL dans le navigateur et clique sur 'Click to Continue'"
 
 ---
 
-### Solution 6 : Utiliser un VPN
-
 Si tu es derrière un firewall strict, essaie avec un VPN :
 
 1. Connecte-toi à un VPN
@@ -116,7 +114,6 @@ Si tu es derrière un firewall strict, essaie avec un VPN :
 | Solution | Fiabilité | Installation | Firewall |
 |----------|-----------|--------------|----------|
 | **serveo** | ⭐⭐⭐⭐ | ✅ SSH | ✅ Fonctionne |
-| **localtunnel** | ⭐⭐⭐ | ❌ Non | ✅ Fonctionne |
 | **cloudflared** | ⭐⭐⭐⭐⭐ | ⚠️ Oui | ⚠️ Peut bloquer UDP |
 
 ---

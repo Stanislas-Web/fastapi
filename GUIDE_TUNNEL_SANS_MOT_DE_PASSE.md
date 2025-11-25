@@ -1,8 +1,4 @@
-# 🔓 Tunnels sans page d'avertissement/mot de passe
-
-## Problème avec localtunnel
-
-Localtunnel affiche une page d'avertissement qui demande de cliquer sur "Click to Continue". C'est une mesure de sécurité.
+# 🌐 Tunnels pour Card Connector
 
 ## Solution recommandée : cloudflared ⭐
 
@@ -50,25 +46,7 @@ https://xxxx-xx-xx-xx-xx.trycloudflare.com/api/v1/webhooks/skaleet/card
 
 ---
 
-## Autres solutions
-
-### Option 1 : Utiliser localtunnel avec subdomain (si disponible)
-
-```bash
-npx --yes localtunnel --port 8000 --subdomain ton-nom-unique
-```
-
-⚠️ Les subdomains sont limités et peuvent ne pas être disponibles.
-
-### Option 2 : Cliquer sur la page localtunnel
-
-Quand localtunnel s'ouvre dans le navigateur :
-1. Clique sur "Click to Continue"
-2. L'URL fonctionnera ensuite
-
-Mais cela ne fonctionne pas pour les webhooks automatiques.
-
-### Option 3 : serveo (SSH tunnel)
+## Alternative : serveo (SSH tunnel)
 
 ```bash
 ssh -R 80:localhost:8000 serveo.net
@@ -83,11 +61,7 @@ Pas de page d'avertissement, mais nécessite SSH.
 | Solution | Page d'avertissement | Installation | Gratuit |
 |----------|---------------------|--------------|---------|
 | **cloudflared** | ❌ Non | ⚠️ Oui | ✅ Oui |
-| **localtunnel** | ✅ Oui | ❌ Non (npx) | ✅ Oui |
-| **ngrok** | ❌ Non* | ⚠️ Oui | ✅ Oui* |
 | **serveo** | ❌ Non | ✅ SSH | ✅ Oui |
-
-*ngrok a des restrictions IP
 
 ---
 
