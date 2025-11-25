@@ -207,6 +207,38 @@ Pour supprimer aussi les volumes (données PostgreSQL) :
 docker-compose down -v
 ```
 
+### Mode Mock NI (pour le développement)
+
+Pour tester le microservice sans dépendre d'un vrai serveur NI, un mode mock est disponible.
+
+**Activer le mode mock** :
+
+Dans ton fichier `.env`, ajoute :
+```bash
+NI_USE_MOCK=true
+```
+
+Quand `NI_USE_MOCK=true`, le client NI utilise des données mockées au lieu d'appeler l'API réelle. Les réponses mockées simulent des opérations réussies :
+- Activation → `status: "ACTIVE"`
+- Blocage → `status: "BLOCKED"`
+- Déblocage → `status: "ACTIVE"`
+- Opposition → `status: "OPPOSED"`
+
+**Données mockées disponibles** :
+
+Le module `app/utils/mock_data.py` contient :
+- `get_mock_ni_response()` : Fonction pour générer des réponses NI mockées
+- `MOCK_CARDS` : Liste de cartes mockées pour les tests
+- `MOCK_WEBHOOKS` : Webhooks mockés pour différents événements
+
+**Exemple d'utilisation** :
+```python
+from app.utils.mock_data import get_mock_ni_response
+
+# Simuler une activation
+response = get_mock_ni_response("activate", card_id=12345, pan_alias="CMSPARTNER-12345")
+```
+
 ## Migrations de base de données
 
 Le projet utilise Alembic pour gérer les migrations de schéma.

@@ -190,10 +190,23 @@ class CardWebhookService:
         ni_response = await ni_method(card_id, pan_alias)
         ni_success = ni_response.success
         
+        # Extraire le numéro VISA de la réponse NI (si disponible)
+        visa_card_number = None
+        ni_details = None
+        if ni_response.details:
+            visa_card_number = ni_response.details.get("visaCardNumber") or ni_response.details.get("panNumber")
+            ni_details = ni_response.details
+        
         # 5. Traiter la réponse NI
         if ni_success:
             # Mettre à jour Card.status_ni
             await self.card_repo.update_status_ni(card.id, success_status)
+            
+            # Si on a un numéro VISA, le sauvegarder dans la base
+            if visa_card_number and hasattr(card, 'ni_card_ref'):
+                card.ni_card_ref = visa_card_number
+                await self.db.commit()
+                await self.db.refresh(card)
             
             # Marquer le webhook comme terminé avec SUCCESS
             await mark_webhook_finished(
@@ -203,9 +216,15 @@ class CardWebhookService:
                 ni_result_code=ni_response.status
             )
             
-            # Appeler Skaleet Admin
+            # Appeler Skaleet Admin avec le numéro VISA
             try:
-                await send_card_operation_result(card_id, operation_type, "accept")
+                await send_card_operation_result(
+                    card_id, 
+                    operation_type, 
+                    "accept",
+                    visa_card_number=visa_card_number,
+                    ni_details=ni_details
+                )
             except Exception as e:
                 logger.error(f"Error sending result to Skaleet: {e}", exc_info=True)
         else:

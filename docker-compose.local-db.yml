@@ -1,0 +1,20 @@
+# Version alternative de docker-compose.yml pour utiliser un PostgreSQL local
+# Usage: docker compose -f docker-compose.local-db.yml up -d
+
+services:
+  card-connector:
+    build: .
+    container_name: card-connector-app
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      # Utilise le PostgreSQL local (host.docker.internal sur Mac/Windows)
+      DATABASE_URL: postgresql://carduser:cardpass@host.docker.internal:5432/card_connector_db
+    volumes:
+      - .:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # Pour accéder au host depuis Docker
+

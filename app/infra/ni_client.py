@@ -1,6 +1,7 @@
 import httpx
 from app.core.config import settings
 from app.schemas.ni import NIRequest, NIResponse
+from app.utils.mock_data import get_mock_ni_response
 import logging
 
 logger = logging.getLogger(__name__)
@@ -10,10 +11,14 @@ class NIClient:
     def __init__(self):
         self.base_url = settings.ni_base_url
         self.api_key = settings.ni_api_key
+        self.use_mock = settings.ni_use_mock
         self.headers = {
             "X-API-Key": self.api_key,
             "Content-Type": "application/json"
         }
+        
+        if self.use_mock:
+            logger.info("🔵 [NI CLIENT] Mode MOCK activé - utilisation des données mockées")
     
     async def create_card(self, card_id: str, metadata: dict = None) -> NIResponse:
         request_data = NIRequest(
@@ -48,6 +53,10 @@ class NIClient:
         """
         Active une carte dans NI
         """
+        # Mode mock : retourner des données mockées
+        if self.use_mock:
+            return get_mock_ni_response("activate", card_id, pan_alias)
+        
         # Utiliser panAlias si disponible, sinon cardId en string
         card_reference = pan_alias if pan_alias else str(card_id)
         
@@ -94,6 +103,10 @@ class NIClient:
         """
         Bloque une carte dans NI
         """
+        # Mode mock : retourner des données mockées
+        if self.use_mock:
+            return get_mock_ni_response("block", card_id, pan_alias)
+        
         # Utiliser panAlias si disponible, sinon cardId en string
         card_reference = pan_alias if pan_alias else str(card_id)
         
@@ -139,6 +152,10 @@ class NIClient:
         """
         Débloque une carte dans NI
         """
+        # Mode mock : retourner des données mockées
+        if self.use_mock:
+            return get_mock_ni_response("unblock", card_id, pan_alias)
+        
         # Utiliser panAlias si disponible, sinon cardId en string
         card_reference = pan_alias if pan_alias else str(card_id)
         
@@ -184,6 +201,10 @@ class NIClient:
         """
         Oppose une carte dans NI
         """
+        # Mode mock : retourner des données mockées
+        if self.use_mock:
+            return get_mock_ni_response("oppose", card_id, pan_alias)
+        
         # Utiliser panAlias si disponible, sinon cardId en string
         card_reference = pan_alias if pan_alias else str(card_id)
         

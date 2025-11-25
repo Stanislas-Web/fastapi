@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     # NI Processor
     ni_base_url: str
     ni_api_key: str
+    ni_use_mock: bool = False  # Si True, utilise les données mockées au lieu d'appeler l'API réelle
     
     # Webhook
     webhook_secret: Optional[str] = None

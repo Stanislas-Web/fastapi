@@ -35,9 +35,22 @@ async def get_admin_token() -> str:
             raise
 
 
-async def send_card_operation_result(card_id: int, operation_type: str, result: str):
+async def send_card_operation_result(
+    card_id: int, 
+    operation_type: str, 
+    result: str,
+    visa_card_number: str | None = None,
+    ni_details: dict | None = None
+):
     """
     Envoie le résultat d'une opération carte à Skaleet Admin API
+    
+    Args:
+        card_id: ID de la carte Skaleet
+        operation_type: Type d'opération (card_activation, card_blocking, etc.)
+        result: Résultat de l'opération ("accept" ou "error")
+        visa_card_number: Numéro de carte VISA généré par NI (optionnel)
+        ni_details: Détails supplémentaires de la réponse NI (optionnel)
     """
     token = await get_admin_token()
     url = f"{settings.skaleet_admin_base_url}/cards/{card_id}/operation/{operation_type}/{result}"
@@ -46,15 +59,33 @@ async def send_card_operation_result(card_id: int, operation_type: str, result: 
         "Content-Type": "application/json"
     }
     
+    # Préparer le body avec les données de la carte VISA si disponibles
+    body = {}
+    if visa_card_number:
+        body["visaCardNumber"] = visa_card_number
+        body["panNumber"] = visa_card_number  # Alias pour compatibilité
+    if ni_details:
+        body["niDetails"] = ni_details
+        # Extraire d'autres infos utiles de ni_details
+        if "expiryDate" in ni_details:
+            body["expiryDate"] = ni_details["expiryDate"]
+        if "niCardId" in ni_details:
+            body["niCardId"] = ni_details["niCardId"]
+    
     async with httpx.AsyncClient() as client:
         try:
             response = await client.post(
                 url,
+                json=body if body else None,
                 headers=headers,
                 timeout=30.0
             )
             response.raise_for_status()
-            logger.info(f"Successfully sent operation result to Skaleet: card_id={card_id}, operation={operation_type}, result={result}")
+            logger.info(
+                f"Successfully sent operation result to Skaleet: "
+                f"card_id={card_id}, operation={operation_type}, result={result}, "
+                f"visaCardNumber={'***' + visa_card_number[-4:] if visa_card_number else 'N/A'}"
+            )
         except httpx.HTTPError as e:
             logger.error(f"Skaleet API error when sending operation result: {e}")
             raise

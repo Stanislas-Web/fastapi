@@ -14,7 +14,13 @@ setup_logging()
 async def lifespan(app: FastAPI):
     """Gestion du cycle de vie de l'application"""
     # Startup: initialiser la base de données
-    await init_db()
+    try:
+        await init_db()
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"⚠️ Impossible d'initialiser la base de données: {e}")
+        logger.warning("Le service démarre quand même, mais certaines fonctionnalités peuvent ne pas fonctionner")
     yield
     # Shutdown: nettoyage si nécessaire
 
