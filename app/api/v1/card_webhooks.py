@@ -54,6 +54,27 @@ async def handle_skaleet_card_webhook(
     # Récupérer le correlation_id depuis le contexte ou request.state
     correlation_id = get_correlation_id_from_context() or getattr(request.state, "correlation_id", "unknown")
     
+    # Si le payload n'inclut pas `data`, essayer d'en déduire `cardId` depuis `id`
+    if webhook.data is None:
+        try:
+            # Si l'id top-level est numérique, l'utiliser comme cardId
+            inferred_card_id = int(webhook.id) if webhook.id and webhook.id.isdigit() else None
+        except Exception:
+            inferred_card_id = None
+
+        if inferred_card_id is not None:
+            # Import local pour éviter cycles
+            from app.schemas.webhook import SkaleetWebhookData
+            webhook.data = SkaleetWebhookData(cardId=inferred_card_id)
+            logger.info(f"Inferred data.cardId={inferred_card_id} from top-level id")
+        else:
+            logger.warning(
+                "Webhook payload missing 'data' and impossible to infer cardId; rejecting or ignoring",
+                extra={"correlation_id": correlation_id, "webhookId": webhook.webhookId}
+            )
+            # Retourner OK pour ne pas faire échouer le producteur de webhook ; il est déjà mal formé
+            return {"ok": False, "event": webhook.event, "message": "missing data"}
+
     # Logger l'event avec correlation_id
     logger.info(
         "Received Skaleet card webhook",

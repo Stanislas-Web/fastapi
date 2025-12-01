@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 from typing import Optional, Dict, Any
 from datetime import datetime
 from enum import Enum
@@ -55,6 +55,7 @@ class SkaleetWebhookData(BaseModel):
          "parameters": {}
        }
     """
+    # Accept both int and numeric strings for cardId; coerce to int when possible
     cardId: int
     panAlias: Optional[str] = None
     
@@ -93,7 +94,33 @@ class SkaleetWebhook(BaseModel):
     webhookId: str
     type: str
     event: str
-    data: SkaleetWebhookData
+    data: Optional[SkaleetWebhookData] = None
+
+    # Ensure that if data.cardId was provided as a string, we coerce it to int
+    @validator("data", pre=True, always=False)
+    def coerce_data_cardid(cls, v):
+        # v may be None or a dict or SkaleetWebhookData
+        if v is None:
+            return v
+        try:
+            # If v is a dict, attempt to coerce numeric-like fields to int
+            if isinstance(v, dict):
+                # cardId
+                if "cardId" in v and v.get("cardId") is not None:
+                    try:
+                        v["cardId"] = int(str(v.get("cardId")).strip())
+                    except Exception:
+                        # leave as-is; will be validated later and produce error if invalid
+                        pass
+                # operationId
+                if "operationId" in v and v.get("operationId") is not None:
+                    try:
+                        v["operationId"] = int(str(v.get("operationId")).strip())
+                    except Exception:
+                        pass
+            return v
+        except Exception:
+            return v
 
 
 # ============================================================================

@@ -1,4 +1,4 @@
-services:
+# services:
   # PostgreSQL - désactivé si tu utilises un PostgreSQL local existant
   # Décommente si tu veux utiliser Docker pour PostgreSQL
   # postgres:
@@ -18,24 +18,72 @@ services:
   #     timeout: 5s
   #     retries: 5
 
+#   card-connector:
+#     build: .
+#     container_name: card-connector-app
+#     # depends_on:
+#     #   postgres:
+#     #     condition: service_healthy
+#     ports:
+#       - "8000:8000"
+#     env_file:
+#       - .env
+#     environment:
+#       # Utilise le PostgreSQL local (host.docker.internal sur Mac/Windows)
+#       # Ou utilise localhost si tu lances le service sans Docker
+#       DATABASE_URL: postgresql://carduser:cardpass@host.docker.internal:5432/card_connector_db
+#     volumes:
+#       - .:/app
+#     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+# volumes:
+#   postgres_data:
+
+
+services:
+  # PostgreSQL - Activé dans Docker pour une configuration fiable
+  postgres:
+    image: postgres:15-alpine
+    container_name: card-connector-postgres
+    environment:
+      POSTGRES_USER: carduser
+      POSTGRES_PASSWORD: cardpass
+      POSTGRES_DB: card_connector_db
+    ports:
+      # Mappe le port 5432 de l'hôte au port 5432 du conteneur (pour accès local si nécessaire)
+      - "5432:5432"
+    volumes:
+      # Utilise un volume persistant pour ne pas perdre les données au redémarrage
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      # Ajout d'un healthcheck pour savoir quand la DB est vraiment prête
+      test: ["CMD-SHELL", "pg_isready -U carduser -d card_connector_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   card-connector:
     build: .
     container_name: card-connector-app
-    # depends_on:
-    #   postgres:
-    #     condition: service_healthy
+    # Attend que le service 'postgres' soit sain avant de démarrer l'application
+    depends_on:
+      postgres:
+        condition: service_healthy
     ports:
       - "8000:8000"
     env_file:
+      # Charge les variables d'environnement depuis un fichier .env (si nécessaire)
       - .env
     environment:
-      # Utilise le PostgreSQL local (host.docker.internal sur Mac/Windows)
-      # Ou utilise localhost si tu lances le service sans Docker
-      DATABASE_URL: postgresql://carduser:cardpass@host.docker.internal:5432/card_connector_db
+      # MODIFIÉ : Utilise le nom du service Docker 'postgres' comme hôte
+      DATABASE_URL: postgresql+asyncpg://carduser:cardpass@postgres:5432/card_connector_db
     volumes:
       - .:/app
+    # Commande pour lancer l'application (uvicorn)
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
+# Déclaration du volume persistant
 volumes:
   postgres_data:
+
 

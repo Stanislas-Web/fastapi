@@ -475,7 +475,17 @@ class CardWebhookService:
         await self.db.commit()
         
         logger.info(f"New card created: {card_id} (panAlias: {pan_alias})")
-        
+        # Inform Skaleet Admin about the card creation (accept)
+        try:
+            await send_card_operation_result(
+                card_id,
+                "CARD_CREATION",
+                "accept",
+                pan_alias=pan_alias
+            )
+        except Exception as e:
+            logger.error(f"Error notifying Skaleet Admin about card creation: {e}", exc_info=True)
+
         return {
             "cardId": card_id,
             "event": event,
