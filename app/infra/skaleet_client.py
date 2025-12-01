@@ -17,7 +17,8 @@ async def get_admin_token() -> str:
                 data={
                     "grant_type": "client_credentials",
                     "client_id": settings.skaleet_admin_client_id,
-                    "client_secret": settings.skaleet_admin_client_secret
+                    "client_secret": settings.skaleet_admin_client_secret,
+                    "scope": "CardUpdate"
                 },
                 timeout=30.0
             )
