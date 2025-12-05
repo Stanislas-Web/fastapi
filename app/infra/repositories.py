@@ -63,11 +63,34 @@ class CardRepository:
         return card
     
     async def get_or_create(self, skaleet_card_id: int, pan_alias: Optional[str] = None) -> Card:
-        """Récupère une carte ou la crée si elle n'existe pas"""
-        card = await self.get_by_skaleet_id(skaleet_card_id)
-        if not card:
-            card = await self.create(skaleet_card_id, pan_alias)
-        return card
+        """Récupère une carte ou la crée si elle n'existe pas
+        
+        Utilise une stratégie de retry pour gérer les race conditions:
+        - Essaie de récupérer la carte
+        - Si elle n'existe pas, essaie de la créer
+        - Si création échoue (doublon), réessaie de récupérer
+        """
+        max_retries = 3
+        for attempt in range(max_retries):
+            card = await self.get_by_skaleet_id(skaleet_card_id)
+            if card:
+                return card
+            
+            try:
+                card = await self.create(skaleet_card_id, pan_alias)
+                return card
+            except Exception as e:
+                # Si c'est une erreur de contrainte unique et que ce n'est pas la dernière tentative
+                if "unique constraint" in str(e).lower() and attempt < max_retries - 1:
+                    # Attendre un peu et réessayer de récupérer la carte
+                    import asyncio
+                    await asyncio.sleep(0.1 * (attempt + 1))
+                    continue
+                # Sinon, propager l'erreur
+                raise
+        
+        # Si on arrive ici, c'est qu'on n'a pas réussi après tous les essais
+        raise RuntimeError(f"Failed to get_or_create card {skaleet_card_id} after {max_retries} attempts")
     
     async def update_status_ni(self, card_id, status_ni: str):
         """Met à jour le statut NI d'une carte"""

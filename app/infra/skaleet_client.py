@@ -10,86 +10,41 @@ async def get_admin_token() -> str:
     """
     Obtient un token d'accès admin Skaleet via OAuth2 client credentials
     """
-    # Try several possible token endpoints and auth methods to be tolerant with test environments
-    candidate_paths = [
-        "/oauth/token",
-        "/oauth2/token",
-        "/token"
-    ]
-
-    candidate_urls = []
-    base = settings.skaleet_admin_base_url.rstrip('/')
-    # If base already contains path like /api/v2/admin, keep it and also try shorter prefixes
-    candidate_urls.append(f"{base}/oauth/token")
-    candidate_urls.append(f"{base}/oauth2/token")
-    candidate_urls.append(f"{base}/token")
-    # Try removing common suffixes
-    if "/admin" in base:
-        prefix = base.replace('/admin', '')
-        candidate_urls.append(f"{prefix}/oauth/token")
-        candidate_urls.append(f"{prefix}/oauth2/token")
-        candidate_urls.append(f"{prefix}/token")
-
-    # De-duplicate
-    candidate_urls = list(dict.fromkeys(candidate_urls))
-
+    # Correct endpoint discovered: /oauth2/token (not /oauth/token)
+    # Must include baseUrl parameter in form data
+    url = f"{settings.skaleet_admin_base_url}/oauth2/token"
+    
     async with httpx.AsyncClient() as client:
-        last_exc = None
-        for url in candidate_urls:
-            # 1) Try form body client credentials
-            try:
-                logger.info(f"Attempting to get admin token via form POST: {url}")
-                response = await client.post(
-                    url,
-                    data={
-                        "grant_type": "client_credentials",
-                        "client_id": settings.skaleet_admin_client_id,
-                        "client_secret": settings.skaleet_admin_client_secret,
-                        "scope": "CardUpdate"
-                    },
-                    timeout=15.0
-                )
-                if response.status_code == 200:
-                    token_data = response.json()
-                    access_token = token_data.get("access_token")
-                    if access_token:
-                        logger.info(f"Obtained admin token from {url} (form)")
-                        return access_token
-                else:
-                    logger.info(f"Form POST to {url} returned status {response.status_code}")
-            except Exception as e:
-                logger.debug(f"Form POST to {url} failed: {e}")
-                last_exc = e
-
-            # 2) Try HTTP Basic auth with grant_type in body
-            try:
-                logger.info(f"Attempting to get admin token via Basic auth POST: {url}")
-                auth = (settings.skaleet_admin_client_id, settings.skaleet_admin_client_secret)
-                response = await client.post(
-                    url,
-                    data={"grant_type": "client_credentials", "scope": "CardUpdate"},
-                    auth=auth,
-                    timeout=15.0
-                )
-                if response.status_code == 200:
-                    token_data = response.json()
-                    access_token = token_data.get("access_token")
-                    if access_token:
-                        logger.info(f"Obtained admin token from {url} (basic)")
-                        return access_token
-                else:
-                    logger.info(f"Basic auth POST to {url} returned status {response.status_code}")
-            except Exception as e:
-                logger.debug(f"Basic auth POST to {url} failed: {e}")
-                last_exc = e
-
-        # If we reach here, no candidate succeeded
-        logger.error("Failed to obtain admin token from candidate URLs")
-        if last_exc:
-            raise last_exc
-        raise RuntimeError("Unable to obtain admin token from configured Skaleet Admin base URL")
-
-
+        try:
+            logger.info(f"Requesting admin token from {url}")
+            response = await client.post(
+                url,
+                data={
+                    "grant_type": "client_credentials",
+                    "client_id": settings.skaleet_admin_client_id,
+                    "client_secret": settings.skaleet_admin_client_secret,
+                    "scope": "CardUpdate",
+                    "baseUrl": settings.skaleet_admin_base_url
+                },
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+                timeout=15.0
+            )
+            response.raise_for_status()
+            token_data = response.json()
+            access_token = token_data.get("access_token")
+            if not access_token:
+                raise ValueError("No access_token in OAuth response")
+            
+            logger.info(f"Successfully obtained admin token (expires in {token_data.get('expires_in', 'N/A')}s)")
+            return access_token
+        except httpx.HTTPError as e:
+            logger.error(f"Skaleet OAuth error: {e}")
+            if hasattr(e, 'response') and e.response is not None:
+                logger.error(f"Response body: {e.response.text[:500]}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error getting admin token: {e}", exc_info=True)
+            raise
 async def send_card_operation_result(
     card_id: int, 
     operation_type: str, 
@@ -135,15 +90,22 @@ async def send_card_operation_result(
     # Préparer le body selon le format Skaleet
     body = {}
     
-    # pan_alias (obligatoire si disponible)
+    # pan_alias (OBLIGATOIRE selon l'API Skaleet)
+    # Si pas fourni, construire une valeur par défaut
     if pan_alias:
         body["pan_alias"] = pan_alias
+    else:
+        # Valeur par défaut si pan_alias absent
+        body["pan_alias"] = f"CMS-{card_id}"
     
     # pan_display: numéro PAN complet (non masqué)
     if visa_card_number:
         body["pan_display"] = visa_card_number
     elif pan_alias:
         body["pan_display"] = pan_alias
+    else:
+        # Utiliser la même valeur que pan_alias si aucun PAN disponible
+        body["pan_display"] = body["pan_alias"]
     
     # external_id: ID externe (peut être le niCardId ou un identifiant unique)
     if ni_details and "niCardId" in ni_details:
@@ -168,6 +130,7 @@ async def send_card_operation_result(
         body["exp_year"] = current_year + 3
     
     logger.info(f"Sending operation result to Skaleet Admin: url={url}, card_id={card_id}, operation={operation_type}, result={result}")
+    logger.info(f"Request body: {body}")
     async with httpx.AsyncClient() as client:
         try:
             response = await client.post(

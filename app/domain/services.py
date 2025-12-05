@@ -10,6 +10,7 @@ from app.utils.idempotency import (
     mark_webhook_started,
     mark_webhook_finished
 )
+from app.utils.mock_data import get_visa_card_number
 import logging
 
 logger = logging.getLogger(__name__)
@@ -475,13 +476,23 @@ class CardWebhookService:
         await self.db.commit()
         
         logger.info(f"New card created: {card_id} (panAlias: {pan_alias})")
+        
+        # Obtenir le numéro VISA mocké pour cette carte
+        visa_card_number = get_visa_card_number(card_id)
+        
         # Inform Skaleet Admin about the card creation (accept)
         try:
             await send_card_operation_result(
                 card_id,
                 "CARD_CREATION",
                 "accept",
-                pan_alias=pan_alias
+                pan_alias=pan_alias,
+                visa_card_number=visa_card_number,
+                ni_details={
+                    "visaCardNumber": visa_card_number,
+                    "niCardId": f"NI-{card_id}",
+                    "expiryDate": "12/2028"
+                }
             )
         except Exception as e:
             logger.error(f"Error notifying Skaleet Admin about card creation: {e}", exc_info=True)
